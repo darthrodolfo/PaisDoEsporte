@@ -1,68 +1,143 @@
 version: '3.8'
+# Versão do Docker Compose file format
+# 3.8 é estável e amplamente suportada (lançada em 2019)
 
 services:
+  # "services" define os containers que vamos rodar
+  # Cada service é um container independente
+  
   postgres:
+    # Nome do serviço (pode ser qualquer nome)
+    # Outros containers podem referenciar como "postgres"
+    
     image: postgres:16-alpine
+    # Imagem Docker a ser usada
+    # postgres:16 = versão do PostgreSQL
+    # alpine = variante minimalista do Linux (~80MB vs ~300MB)
+    # Mais leve, mais rápida, mais segura
+    
     container_name: paisdoesporte_db
+    # Nome específico do container (aparece no "docker ps")
+    # Se não definir, Docker gera nome aleatório
+    # Facilita comandos: docker exec -it paisdoesporte_db ...
+    
     environment:
-      POSTGRES_DB: paisdoesporte
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      # Variáveis de ambiente passadas para o container
+      # O container do Postgres usa essas vars para configuração inicial
+      
+      POSTGRES_DB: paisdoesportedb
+      # Nome do database que será criado automaticamente
+      # Se não existir, é criado na primeira inicialização
+      
+      POSTGRES_USER: postgres007
+      # Usuário admin do PostgreSQL
+      
+      POSTGRES_PASSWORD: senhaPublica007
+      # Senha do database (banco de dados local)
+    
     ports:
-      - "5432:5432"
+      # Mapeamento de portas: "host:container"
+      - "5433:5432"
+      # Porta 5432 do seu Windows mapeia para porta 5432 do container
+      # Permite acessar o banco via localhost:5432
+      # Se já tiver Postgres local rodando na 5432, mude para "5433:5432"
+    
     volumes:
+      # Volumes persistem dados mesmo quando o container é deletado
+      
       - postgres_data:/var/lib/postgresql/data
+      # Volume nomeado "postgres_data" → diretório interno do Postgres
+      # /var/lib/postgresql/data = onde o Postgres guarda os dados
+      # Sem isso, deletar container = perder todos os dados
+      
       - ./database/migrations:/docker-entrypoint-initdb.d:ro
+      # Bind mount: mapeia pasta local → pasta do container
+      # ./database/migrations (seu Windows) → /docker-entrypoint-initdb.d (container)
+      # :ro = read-only (segurança)
+      # /docker-entrypoint-initdb.d = pasta ESPECIAL do Postgres
+      #   → Executa automaticamente .sql, .sh, .sql.gz na primeira inicialização
+      #   → Executa em ordem alfabética (por isso 001_, 002_, etc)
+    
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
+      # Define como Docker verifica se o container está saudável
+      
+      test: ["CMD-SHELL", "pg_isready -U postgres007"]
+      # Comando executado dentro do container para verificar saúde
+      # pg_isready = utilitário do Postgres que testa conexão
+      # -U postgres = testa com usuário "postgres007"
+      # Retorna 0 (sucesso) se Postgres aceitar conexões
+      
+      interval: 60s
+      # A cada 10 segundos, executa o teste
+      
+      timeout: 10s
+      # Se o comando não responder em 5s, considera falha
+      
       retries: 5
+      # Número de tentativas antes de marcar como "unhealthy"
+      # 5 falhas consecutivas = container marcado como doente
+    
     networks:
+      # Conecta este container à rede personalizada
       - paisdoesporte_network
+      # Containers na mesma rede conseguem se comunicar pelo nome
+      # Ex: PgAdmin acessa Postgres via "postgres:5432"
 
   pgadmin:
+    # Interface web para gerenciar PostgreSQL
+    
     image: dpage/pgadmin4:latest
+    # Imagem oficial do PgAdmin
+    # latest = sempre puxa a versão mais recente
+    # Em produção, fixe uma versão específica: dpage/pgadmin4:8.0
+    
     container_name: paisdoesporte_pgadmin
+    
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@paisdoesporte.com
+      # Email para login no PgAdmin
+      
       PGADMIN_DEFAULT_PASSWORD: admin
+      # Senha para login (mudar em produção!)
+      
       PGADMIN_CONFIG_SERVER_MODE: 'False'
+      # False = modo desktop (não pede senha mestra)
+      # True = modo servidor (pede senha adicional)
+      
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+      # Não requer senha mestra ao iniciar
+      # Mais prático para desenvolvimento local
+    
     ports:
       - "5050:80"
+      # PgAdmin roda internamente na porta 80
+      # Mapeia para 5050 no seu Windows
+      # Acessa via: http://localhost:5050
+    
     depends_on:
+      # Define ordem de inicialização
+      
       postgres:
         condition: service_healthy
+        # Só inicia PgAdmin DEPOIS que Postgres estiver "healthy"
+        # Sem isso, PgAdmin pode tentar conectar antes do Postgres estar pronto
+        # condition: service_healthy requer o healthcheck definido
+    
     volumes:
       - pgadmin_data:/var/lib/pgadmin
+      # Persiste configurações do PgAdmin (servidores salvos, preferências)
+      # Sem isso, toda vez que reiniciar perde as configurações
+    
     networks:
       - paisdoesporte_network
 
   redis:
+    # Cache in-memory - usaremos futuramente
+    
     image: redis:7-alpine
+    # Redis versão 7, Alpine (leve)
+    
     container_name: paisdoesporte_redis
+    
     ports:
       - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    networks:
-      - paisdoesporte_network
-
-volumes:
-  postgres_data:
-    driver: local
-  pgadmin_data:
-    driver: local
-  redis_data:
-    driver: local
-
-networks:
-  paisdoesporte_network:
-    driver: bridge
