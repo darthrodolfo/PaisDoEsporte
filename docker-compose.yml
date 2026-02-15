@@ -34,6 +34,10 @@ services:
       
       POSTGRES_PASSWORD: senhaPublica007
       # Senha do database (banco de dados local)
+      
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=pt-BR"
+      #adicionando biblioteca de provider para melhoria de busca com strings contendo acentuação. (locale provider)
+    
     
     ports:
       # Mapeamento de portas: "host:container"
@@ -76,12 +80,14 @@ services:
       retries: 5
       # Número de tentativas antes de marcar como "unhealthy"
       # 5 falhas consecutivas = container marcado como doente
-    
+    restart: unless-stopped
+
     networks:
       # Conecta este container à rede personalizada
       - paisdoesporte_network
       # Containers na mesma rede conseguem se comunicar pelo nome
       # Ex: PgAdmin acessa Postgres via "postgres:5432"
+      
 
   pgadmin:
     # Interface web para gerenciar PostgreSQL
@@ -107,7 +113,7 @@ services:
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
       # Não requer senha mestra ao iniciar
       # Mais prático para desenvolvimento local
-    
+
     ports:
       - "5050:80"
       # PgAdmin roda internamente na porta 80
@@ -132,12 +138,30 @@ services:
       - paisdoesporte_network
 
   redis:
-    # Cache in-memory - usaremos futuramente
-    
     image: redis:7-alpine
-    # Redis versão 7, Alpine (leve)
-    
     container_name: paisdoesporte_redis
-    
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - paisdoesporte_network
+
+  volumes:
+    postgres_data:
+      driver: local
+    pgadmin_data:
+      driver: local
+    redis_data:
+      driver: local
+  
+  networks:
+    paisdoesporte_network:
+      driver: bridge
