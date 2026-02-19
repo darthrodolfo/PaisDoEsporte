@@ -65,7 +65,7 @@ services:
     healthcheck:
       # Define como Docker verifica se o container está saudável
       
-      test: ["CMD-SHELL", "pg_isready -U postgres007"]
+      test: ["CMD-SHELL", "pg_isready -U postgres007 -d paisdoesportedb"]
       # Comando executado dentro do container para verificar saúde
       # pg_isready = utilitário do Postgres que testa conexão
       # -U postgres = testa com usuário "postgres007"
@@ -154,14 +154,14 @@ services:
     networks:
       - paisdoesporte_network
 
-  volumes:
-    postgres_data:
-      driver: local
-    pgadmin_data:
-      driver: local
-    redis_data:
-      driver: local
-  
-  networks:
-    paisdoesporte_network:
-      driver: bridge
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  paisdoesporte_network:
+    driver: bridge
